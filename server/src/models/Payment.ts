@@ -1,77 +1,35 @@
 import mongoose, { Document, Schema } from 'mongoose';
+import { IPayorAccount } from './PayorAccount';
+import { IPayeeAccount } from './PayeeAccount';
+import {ICorporateEntity} from "./CorporateEntity";
+import {IIndividualEntity} from "./IndividualEntity";
 
-export interface IEmployee {
-  DunkinId: string;
-  DunkinBranch: string;
-  FirstName: string;
-  LastName: string;
-  DOB: string;
-  PhoneNumber: string;
-}
-
-export interface IPayor {
-  DunkinId: string;
-  ABARouting: string;
-  AccountNumber: string;
-  Name: string;
-  DBA: string;
-  EIN: string;
-  Address: {
-    Line1: string;
-    City: string;
-    State: string;
-    Zip: string;
-  };
-}
-
-export interface IPayee {
-  PlaidId: string;
-  LoanAccountNumber: string;
-}
 
 export interface IPayment extends Document {
-  employee: IEmployee;
-  payor: IPayor;
-  payee: IPayee;
+  id: string;
+  paymentRequestId: string;
+  corporate: ICorporateEntity;
+  employee: IIndividualEntity;
+  payor: IPayorAccount;
+  payee: IPayeeAccount;
+  createdDate: Date;
   amount: number;
-  status: 'Pending' | 'Processed' | 'Failed';
+  status: string;
+  message: string;
 }
 
-const EmployeeSchema: Schema = new Schema({
-  DunkinId: { type: String, required: true },
-  DunkinBranch: { type: String, required: true },
-  FirstName: { type: String, required: true },
-  LastName: { type: String, required: true },
-  DOB: { type: String, required: true },
-  PhoneNumber: { type: String, required: true }
-});
-
-const PayorSchema: Schema = new Schema({
-  DunkinId: { type: String, required: true },
-  ABARouting: { type: String, required: true },
-  AccountNumber: { type: String, required: true },
-  Name: { type: String, required: true },
-  DBA: { type: String, required: true },
-  EIN: { type: String, required: true },
-  Address: {
-    Line1: { type: String, required: true },
-    City: { type: String, required: true },
-    State: { type: String, required: true },
-    Zip: { type: String, required: true }
-  }
-});
-
-const PayeeSchema: Schema = new Schema({
-  PlaidId: { type: String, required: true },
-  LoanAccountNumber: { type: String, required: true }
-});
 
 const PaymentSchema: Schema = new Schema({
-  employee: { type: EmployeeSchema, required: true },
-  payor: { type: PayorSchema, required: true },
-  payee: { type: PayeeSchema, required: true },
+  id : { type: String, required: false },
+  paymentRequestId: { type: String, required: true },
+  corporate: { type: Schema.Types.ObjectId, ref: 'CorporateEntity', required: false },
+  employee: { type: Schema.Types.ObjectId, ref: 'IndividualEntity', required: false },
+  payor: { type: Schema.Types.ObjectId, ref: 'PayorAccount', required: false },
+  payee: { type: Schema.Types.ObjectId, ref: 'PayeeAccount', required: false },
+  createdAt: { type: Date, required: true },
+  status: { type: String, required: true },
   amount: { type: Number, required: true },
-  status: { type: String, enum: ['Pending', 'Processed', 'Failed'], default: 'Pending' }
+  message: { type: String, required: true }
 });
 
 export const Payment = mongoose.model<IPayment>('Payment', PaymentSchema);

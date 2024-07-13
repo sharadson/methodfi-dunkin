@@ -43,11 +43,15 @@
 
 .fileInputLabel {
   display: inline-block;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  height: 22px;
+  width: 100px;
   padding: 6px 12px;
   cursor: pointer;
-  background-color: #3f84b5;
+  background-color: #1976d2;
   color: #fff;
   border: none;
   border-radius: 4px;
-  margin-top: 10px;
 }

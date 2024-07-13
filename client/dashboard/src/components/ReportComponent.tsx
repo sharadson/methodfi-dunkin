@@ -20,8 +20,8 @@ const ReportComponent: React.FC = () => {
     <div>
       <h2>Reports</h2>
       <Button variant="contained" onClick={() => fetchReport('totalAmountPerSource')}>Total Amount Per Source</Button>
-      <Button variant="contained" onClick={() => fetchReport('totalAmountPerBranch')}>Total Amount Per Branch</Button>
-      <Button variant="contained" onClick={() => fetchReport('paymentStatus')}>Payment Status</Button>
+      <Button variant="contained" onClick={() => fetchReport('totalAmountPerBranch')} style={{ marginLeft: '10px' }}>Total Amount Per Branch</Button>
+      <Button variant="contained" onClick={() => fetchReport('paymentStatus')} style={{ marginLeft: '10px' }}>Payment Status</Button>
       <ul>
         {reports.map((report, index) => (
           <li key={index}>{report}</li>

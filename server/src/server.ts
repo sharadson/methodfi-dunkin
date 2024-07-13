@@ -26,7 +26,7 @@ app.post('/api/upload', async (req, res) => {
     if (err) return res.status(500).send('Error parsing XML.');
 
     try {
-      const payments = await paymentService.createPaymentsFromXML(result);
+      const payments = await paymentService.createPaymentRequestsFromXML(result);
       res.send(payments);
     } catch (error) {
       res.status(500).send('Error saving to database.');
@@ -36,7 +36,16 @@ app.post('/api/upload', async (req, res) => {
 
 app.post('/api/approve', async (req, res) => {
   try {
-    const payments = await paymentService.approvePayments();
+    const payments = await paymentService.processPaymentRequests();
+    res.send(payments);
+  } catch (error) {
+    res.status(500).send('Error processing payments.');
+  }
+});
+
+app.post('/api/discard', async (req, res) => {
+  try {
+    const payments = await paymentService.discardPaymentRequests();
     res.send(payments);
   } catch (error) {
     res.status(500).send('Error processing payments.');

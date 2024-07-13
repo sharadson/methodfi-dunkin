@@ -1,7 +1,7 @@
 import * as React from 'react';
 import ReportComponent from './components/ReportComponent';
 import FileUploadComponent1 from './components/FileUploadComponent1';
-import PaymentReviewComponent from './components/PaymentReviewComponent';
+import PaymentComponent from './components/PaymentComponent';
 import FileUploadComponent from "./components/FileUploadComponent";
 
 function App() {
@@ -13,7 +13,7 @@ function App() {
       <div className="App">
           {/*<FileUploadComponent1 onUploadSuccess={handleUploadSuccess} />*/}
           <FileUploadComponent />
-          <PaymentReviewComponent payments={[]} onApprove={() => {}} onDiscard={() => {}} />
+          <PaymentComponent payments={[]} onApprove={() => {}} onDiscard={() => {}} />
           <ReportComponent />
       </div>
   );

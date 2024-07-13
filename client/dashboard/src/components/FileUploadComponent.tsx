@@ -6,12 +6,15 @@ import '../App.css';
 
 const FileUpload: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileName, setFileName] = useState<string>('');
   const [uploadStatus, setUploadStatus] = useState<string>('');
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       setSelectedFile(event.target.files[0]);
+      setFileName(event.target.files[0].name);
     }
+    setUploadStatus('');
   };
 
   const handleFileUpload = async () => {
@@ -38,11 +41,19 @@ const FileUpload: React.FC = () => {
     <div>
       <h2>File Upload</h2>
       <label htmlFor="fileUpload" className="fileInputLabel">
-        Select a file
+        SELECT FILE
       </label>
       <input id="fileUpload" type="file" onChange={handleFileChange} className="fileInput"/>
-      <Button variant="contained" onClick={handleFileUpload}>Upload</Button>
+      <Button
+        variant="contained"
+        onClick={handleFileUpload}
+        style={{ marginLeft: '10px' }}
+        disabled={!selectedFile}
+      >
+        Upload
+      </Button>
       <p>{uploadStatus}</p>
+      <p>Selected file: {fileName}</p>
     </div>
   );
 };

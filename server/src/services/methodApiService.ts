@@ -1,8 +1,14 @@
 import axios from 'axios';
-import { IPayment } from '../models/Payment';
+import {IPaymentRequest, IPayor, IPayee, IEmployee} from '../models/PaymentRequest';
+import {ICorporateEntity, CorporateEntity} from "../models/CorporateEntity";
+import {IIndividualEntity, IndividualEntity} from "../models/IndividualEntity";
+import {Merchant} from "../models/Merchant";
+import {PayeeAccount} from "../models/PayeeAccount";
+import {PayorAccount} from "../models/PayorAccount";
+import {Payment} from "../models/Payment";
 
-const METHOD_API_BASE_URL = 'https://api.methodfi.com';
-const METHOD_API_KEY = process.env.METHOD_API_KEY || 'your-api-key-here';
+const METHOD_API_BASE_URL = 'https://dev.methodfi.com';
+const METHOD_API_KEY = process.env.METHOD_API_KEY || 'sk_iUigphRRVh9RpEM8MkTNhWtM';
 
 const methodApi = axios.create({
   baseURL: METHOD_API_BASE_URL,
@@ -13,78 +19,148 @@ const methodApi = axios.create({
 });
 
 class MethodApiService {
-  async createCorporateEntity(payor: any) {
-    const { DunkinId, Name, DBA, EIN } = payor;
+  async createCorporateEntity(payor: IPayor) {
+    let corporateEntity = await CorporateEntity.findOne({ ein: payor.ein });
+    if (corporateEntity) {
+      return corporateEntity;
+    }
+    const {name, dba, ein} = payor;
     const response = await methodApi.post('/entities', {
       type: 'corporation',
-      ein: EIN,
+      ein: ein,
       corporation: {
-        name: Name,
-        dba: DBA,
+        name: name,
+        dba: dba,
         owners: []
       }
     });
-    return response.data;
+    corporateEntity = new CorporateEntity({
+      entityId: response.data.EntityId, ein: ein
+    });
+    await corporateEntity.save();
+    return corporateEntity;
   }
 
-  async createIndividualEntity(employee: any) {
-    const { FirstName, LastName, DOB, PhoneNumber } = employee;
+  async createIndividualEntity(employee: IEmployee) {
+    const { firstName, lastName, dob, dunkinId, dunkinBranch } = employee;
+    let individualEntity = await IndividualEntity.findOne({ dunkinId });
+    if (individualEntity) {
+      return individualEntity;
+    }
     const response = await methodApi.post('/entities', {
       type: 'individual',
       individual: {
-        first_name: FirstName,
-        last_name: LastName,
-        dob: DOB,
-        phone: PhoneNumber
+        first_name: firstName,
+        last_name: lastName,
+        dob: dob,
+        phone: '+15121231111' // Hardcoded coded phone number as suggested
       }
     });
-    return response.data;
+    individualEntity = new IndividualEntity({
+      entityId: response.data.EntityId, dunkinId: dunkinId, dunkinBranch: dunkinBranch
+    });
+    await individualEntity.save();
+    return individualEntity;
   }
 
-  async createAccount(entityId: string, accountNumber: string, routingNumber: string) {
+  async createPayorAccount(payor: IPayor, corporateEntity: ICorporateEntity) {
+    const { accountNumber, abaRouting, dunkinId } = payor;
+    let payorAccount = await PayorAccount.findOne({ accountNumber: accountNumber, abaRouting: abaRouting });
+    if (payorAccount) {
+      return payorAccount;
+    }
     const response = await methodApi.post('/accounts', {
-      entity_id: entityId,
+      holder_id: corporateEntity.entityId,
       ach: {
-        account: accountNumber,
-        routing: routingNumber
+        number: payor.accountNumber,
+        routing: payor.abaRouting,
+        type: 'checking',
       }
     });
-    return response.data;
+    payorAccount = new PayorAccount({
+      accountId: response.data.id, dunkinId: dunkinId, entityId: corporateEntity.entityId
+    });
+    await payorAccount.save();
+    return payorAccount;
   }
 
-  async processPayment(payment: IPayment) {
+  private createPayeeAccount = async (individualEntity: IIndividualEntity, payee: IPayee) => {
+    let payeeAccount = await PayeeAccount.findOne({ plaidId: payee.plaidId });
+    if (payeeAccount) {
+      return payeeAccount;
+    }
+    let merchant = await Merchant.findOne({ plaidId: payee.plaidId });
+    if (!merchant) {
+      const merchantResponse = await methodApi.get(`/merchants?plaid_id=${payee.plaidId}`);
+      merchant = new Merchant({
+        merchantId: merchantResponse.data.data[0],
+        plaidId: payee.plaidId
+      });
+      await merchant.save();
+    }
+
+    const response = await methodApi.post('/accounts', {
+      holder_id: individualEntity.entityId,
+      liability: {
+        mch_id: merchant.merchantId,
+        plaid_id: payee.plaidId
+      }
+    });
+    payeeAccount = new PayeeAccount({
+      accountId: response.data.id, plaidId: payee.plaidId, entityId: individualEntity.entityId
+    });
+    await payeeAccount.save();
+    return payeeAccount
+  }
+
+  async processPaymentRequest(paymentRequest: IPaymentRequest) {
+    const { paymentRequestId, employee, payor, payee, amount } = paymentRequest;
+
     try {
-      const { employee, payor, payee, amount } = payment;
+      const corporateEntity = await this.createCorporateEntity(payor);
 
-      const payorEntity = await this.createCorporateEntity(payor);
+      const individualEntity = await this.createIndividualEntity(employee);
 
-      const employeeEntity = await this.createIndividualEntity(employee);
+      const payorAccount = await this.createPayorAccount(payor, corporateEntity);
 
-      const payorAccount = await this.createAccount(payorEntity.id, payor.AccountNumber, payor.ABARouting);
+      const payeeAccount = await this.createPayeeAccount(individualEntity, payee);
 
-      const merchantResponse = await methodApi.get(`/merchants?plaid_id=${payee.PlaidId}`);
-      const merchant = merchantResponse.data.data[0];
-
-      const paymentResponse = await methodApi.post('/payments', {
+      const response = await methodApi.post('/payments', {
         amount: {
           currency: 'USD',
           amount: Math.round(amount * 100) // Convert to cents
         },
-        source: {
-          account_id: payorAccount.id
-        },
-        destination: {
-          merchant_id: merchant.id,
-          type: 'loan',
-          account_number: payee.LoanAccountNumber
-        },
-        description: `Student loan payment for ${employee.FirstName} ${employee.LastName}`
+        source:  payorAccount.id,
+        destination: payeeAccount.id,
+        description: `Student loan payment for ${employee.firstName} ${employee.lastName}`
       });
 
-      return { success: true, data: paymentResponse.data };
+      const payment = new Payment({
+        id: response.data.id,
+        paymentRequestId: paymentRequestId,
+        corporate: corporateEntity.entityId,
+        employee: individualEntity.entityId,
+        payee: payeeAccount.accountId,
+        payor: payorAccount.accountId,
+        amount: amount,
+        createdAt: new Date(),
+        status: response.data.status,
+        message: 'Success'
+      });
+      await payment.save();
     } catch (error: any) {
       console.error('Error processing payment:', error);
-      return { success: false, error: error.message };
+      const payment = new Payment({
+        paymentRequestId: paymentRequestId,
+        corporate: null,
+        employee: null,
+        payee: null,
+        payor: null,
+        amount: paymentRequest.amount,
+        createdAt: new Date(),
+        status: 'Failed',
+        message: error.message
+      });
     }
   }
 }

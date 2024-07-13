@@ -1,67 +1,83 @@
-import {IPayment, Payment} from '../models/Payment';
+import {IPaymentRequest, PaymentRequest} from '../models/PaymentRequest';
 import methodApiService from './methodApiService';
+import { v4 as uuid } from 'uuid';
+import {Payment} from "../models/Payment";
+import {CorporateEntity} from "../models/CorporateEntity";
+import {IndividualEntity} from "../models/IndividualEntity";
+import {Merchant} from "../models/Merchant";
+import {PayeeAccount} from "../models/PayeeAccount";
+import {PayorAccount} from "../models/PayorAccount";
 
 export class PaymentService {
-  async createPaymentsFromXML(xmlData: any): Promise<IPayment[]> {
+  async createPaymentRequestsFromXML(xmlData: any): Promise<IPaymentRequest[]> {
     console.log('xmlData:', xmlData)
-    const paymentsData = xmlData.root.row.map((row: any) => ({
+    const paymentRequestsData = xmlData.root.row.map((row: any) => ({
+      paymentRequestId: uuid(),
       employee: {
-        DunkinId: row.Employee[0].DunkinId[0],
-        DunkinBranch: row.Employee[0].DunkinBranch[0],
-        FirstName: row.Employee[0].FirstName[0],
-        LastName: row.Employee[0].LastName[0],
-        DOB: row.Employee[0].DOB[0],
-        PhoneNumber: row.Employee[0].PhoneNumber[0]
+        dunkinId: row.Employee[0].DunkinId[0],
+        dunkinBranch: row.Employee[0].DunkinBranch[0],
+        firstName: row.Employee[0].FirstName[0],
+        lastName: row.Employee[0].LastName[0],
+        dob: row.Employee[0].DOB[0],
+        phoneNumber: row.Employee[0].PhoneNumber[0]
       },
       payor: {
-        DunkinId: row.Payor[0].DunkinId[0],
-        ABARouting: row.Payor[0].ABARouting[0],
-        AccountNumber: row.Payor[0].AccountNumber[0],
-        Name: row.Payor[0].Name[0],
-        DBA: row.Payor[0].DBA[0],
-        EIN: row.Payor[0].EIN[0],
-        Address: {
-          Line1: row.Payor[0].Address[0].Line1[0],
-          City: row.Payor[0].Address[0].City[0],
-          State: row.Payor[0].Address[0].State[0],
-          Zip: row.Payor[0].Address[0].Zip[0]
+        dunkinId: row.Payor[0].DunkinId[0],
+        abaRouting: row.Payor[0].ABARouting[0],
+        accountNumber: row.Payor[0].AccountNumber[0],
+        name: row.Payor[0].Name[0],
+        dba: row.Payor[0].DBA[0],
+        ein: row.Payor[0].EIN[0],
+        address: {
+          line1: row.Payor[0].Address[0].Line1[0],
+          city: row.Payor[0].Address[0].City[0],
+          state: row.Payor[0].Address[0].State[0],
+          zip: row.Payor[0].Address[0].Zip[0]
         }
       },
       payee: {
-        PlaidId: row.Payee[0].PlaidId[0],
-        LoanAccountNumber: row.Payee[0].LoanAccountNumber[0]
+        plaidId: row.Payee[0].PlaidId[0],
+        loanAccountNumber: row.Payee[0].LoanAccountNumber[0]
       },
       amount: parseFloat(row.Amount[0].replace('$', '')),
       status: 'Pending'
     }));
-    console.log('paymentsData:', paymentsData)
-    const paymentDocs = await Payment.insertMany(paymentsData);
-    console.log('paymentDocs:', paymentDocs)
-    return paymentDocs.map(doc => doc.toObject());
+    console.log('paymentRequestsData:', paymentRequestsData)
+    const paymentRequestsDocs = await PaymentRequest.insertMany(paymentRequestsData);
+    console.log('paymentRequestsDocs:', paymentRequestsDocs)
+    return paymentRequestsDocs.map(doc => doc.toObject());
   }
 
-  async approvePayments(): Promise<IPayment[]> {
-    const payments = await Payment.find({ status: 'Pending' });
-    for (const payment of payments) {
-      const response = await methodApiService.processPayment(payment);
-      payment.status = response.success ? 'Processed' : 'Failed';
-      await payment.save();
+  async processPaymentRequests() {
+    const paymentRequests = await PaymentRequest.find();
+    for (const paymentRequest of paymentRequests) {
+      const payment = await methodApiService.processPaymentRequest(paymentRequest);
     }
-    return payments;
+  }
+
+  async discardPaymentRequests() {
+    console.log('Discarding all payment requests');
+    await PaymentRequest.deleteMany({});
+    await CorporateEntity.deleteMany({});
+    await IndividualEntity.deleteMany({});
+    await Merchant.deleteMany({});
+    await PayeeAccount.deleteMany({});
+    await PayorAccount.deleteMany({});
+    await Payment.deleteMany({});
   }
 
   async generateReport(type: string): Promise<any> {
     let report;
     if (type === 'totalAmountPerSource') {
-      report = await Payment.aggregate([
+      report = await PaymentRequest.aggregate([
         { $group: { _id: '$payor.DunkinId', totalAmount: { $sum: '$amount' } } }
       ]);
     } else if (type === 'totalAmountPerBranch') {
-      report = await Payment.aggregate([
+      report = await PaymentRequest.aggregate([
         { $group: { _id: '$employee.DunkinBranch', totalAmount: { $sum: '$amount' } } }
       ]);
     } else if (type === 'paymentStatus') {
-      report = await Payment.find({}, { employee: 1, amount: 1, status: 1 });
+      report = await PaymentRequest.find({}, { employee: 1, amount: 1, status: 1 });
     }
     return report;
   }
