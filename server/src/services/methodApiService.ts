@@ -56,18 +56,17 @@ class MethodApiService {
     const [month, day, year] = employee.dob.split("-");
     const formattedDob = `${year}-${month}-${day}`;
 
-    // const response = await methodApi.post('/entities', {
-    //   type: 'individual',
-    //   individual: {
-    //     first_name: firstName,
-    //     last_name: lastName,
-    //     dob: formattedDob,
-    //     phone: '+15121231111' // Hardcoded coded phone number as suggested
-    //   }
-    // });
+    const response = await methodApi.post('/entities', {
+      type: 'individual',
+      individual: {
+        first_name: firstName,
+        last_name: lastName,
+        dob: formattedDob,
+        phone: '+15121231111' // Hardcoded coded phone number as suggested
+      }
+    });
     individualEntity = new IndividualEntity({
-      // entityId: response.data.data.id,
-      entityId: 'ent_jELbgVF7yb4WU',
+      entityId: response.data.data.id,
       dunkinId: dunkinId,
       dunkinBranch: dunkinBranch
     });
@@ -190,7 +189,10 @@ class MethodApiService {
       const response = await methodApi.post('/payments', {
         amount: amount * 100, // Convert to cents
         source:  payorAccount.accountId,
-        destination: payeeAccount.accountId,
+        // destination: payeeAccount.accountId,
+        // IMP: Hardcoding a destination account whose holder is verified using Method Element
+        // Doing this as there is no programmatic way to verify the individual account holder. And we can not deposit payment in unverified individual entities
+        destination: 'acc_6AYf8tqziqzmH',
         description: `Loan pmt`
       });
 
@@ -216,11 +218,12 @@ class MethodApiService {
         employee: '',
         payee: '',
         payor: '',
-        amount: paymentRequest.amount,
         createdAt: new Date(),
         status: 'Failed',
+        amount: paymentRequest.amount,
         message: error.message
       });
+      await payment.save();
     }
   }
 
