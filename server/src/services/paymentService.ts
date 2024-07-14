@@ -10,7 +10,6 @@ import {PayorAccount} from "../models/PayorAccount";
 
 export class PaymentService {
   async createPaymentRequestsFromXML(xmlData: any): Promise<IPaymentRequest[]> {
-    console.log('xmlData:', xmlData)
     const paymentRequestsData = xmlData.root.row.map((row: any) => ({
       paymentRequestId: uuid(),
       employee: {
@@ -42,16 +41,15 @@ export class PaymentService {
       amount: parseFloat(row.Amount[0].replace('$', '')),
       status: 'Pending'
     }));
-    console.log('paymentRequestsData:', paymentRequestsData)
     const paymentRequestsDocs = await PaymentRequest.insertMany(paymentRequestsData);
-    console.log('paymentRequestsDocs:', paymentRequestsDocs)
     return paymentRequestsDocs.map(doc => doc.toObject());
   }
 
   async processPaymentRequests() {
     const paymentRequests = await PaymentRequest.find();
+
     for (const paymentRequest of paymentRequests) {
-      const payment = await methodApiService.processPaymentRequest(paymentRequest);
+      await methodApiService.processPaymentRequest(paymentRequest);
     }
   }
 

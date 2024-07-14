@@ -14,15 +14,15 @@ const onApprove = async () => {
   console.log('Approve');
 
   try {
-    const response = await axios.post('http://localhost:5001/api/discard');
+    const response = await axios.post('http://localhost:5001/api/approve');
 
     if (response.status === 200) {
-      console.log('All collections cleared');
+      console.log('All collections Processed');
     } else {
-      console.error('Error clearing collections:', response.statusText);
+      console.error('Error processing collections:', response.statusText);
     }
   } catch (error) {
-    console.error('Error clearing collections:', error);
+    console.error('Error processing collections:', error);
   }
 };
 

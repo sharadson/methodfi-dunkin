@@ -21,7 +21,7 @@ app.post('/api/upload', async (req, res) => {
   }
 
   const xmlFile = (req.files.file as fileUpload.UploadedFile).data.toString('utf8');
-  console.log('xmlFile', xmlFile)
+
   xml2js.parseString(xmlFile, async (err, result) => {
     if (err) return res.status(500).send('Error parsing XML.');
 

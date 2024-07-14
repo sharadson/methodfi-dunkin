@@ -6,7 +6,7 @@ import {IIndividualEntity} from "./IndividualEntity";
 
 
 export interface IPayment extends Document {
-  id: string;
+  paymentId: string;
   paymentRequestId: string;
   corporate: ICorporateEntity;
   employee: IIndividualEntity;
@@ -20,12 +20,12 @@ export interface IPayment extends Document {
 
 
 const PaymentSchema: Schema = new Schema({
-  id : { type: String, required: false },
+  paymentId : { type: String, required: false },
   paymentRequestId: { type: String, required: true },
-  corporate: { type: Schema.Types.ObjectId, ref: 'CorporateEntity', required: false },
-  employee: { type: Schema.Types.ObjectId, ref: 'IndividualEntity', required: false },
-  payor: { type: Schema.Types.ObjectId, ref: 'PayorAccount', required: false },
-  payee: { type: Schema.Types.ObjectId, ref: 'PayeeAccount', required: false },
+  corporate: { type: String, ref: 'CorporateEntity', required: false },
+  employee: { type: String, ref: 'IndividualEntity', required: false },
+  payor: { type: String, ref: 'PayorAccount', required: false },
+  payee: { type: String, ref: 'PayeeAccount', required: false },
   createdAt: { type: Date, required: true },
   status: { type: String, required: true },
   amount: { type: Number, required: true },
