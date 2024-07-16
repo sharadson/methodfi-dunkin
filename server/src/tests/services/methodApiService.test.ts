@@ -6,6 +6,7 @@ import MethodApiService from '../../services/methodApiService';
 import PaymentService from "../../services/paymentService";
 import xml2js from 'xml2js';
 import { Payment } from "../../models/Payment";
+import methodApiService from "../../services/methodApiService";
 
 beforeAll(async () => {
   await mongoose.connect(process.env.MONGO_URI as string);
@@ -27,8 +28,8 @@ describe('Process PaymentRequest Uploaded via XML', () => {
     const parsedXml = await xml2js.parseStringPromise(xmlContent);
 
     const paymentRequest = await convertXmlToPaymentRequest(parsedXml);
-
-    await MethodApiService.processPaymentRequest(paymentRequest);
+    const merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
+    await MethodApiService.processPaymentRequest(paymentRequest, merchantsByPlaidId);
 
     const payment = await Payment.findOne({ paymentRequestId: paymentRequest.paymentRequestId });
     expect(payment?.status).toBe('pending');
@@ -36,6 +37,6 @@ describe('Process PaymentRequest Uploaded via XML', () => {
 });
 
 async function convertXmlToPaymentRequest(parsedXml: any): Promise<IPaymentRequest> {
-  const paymentRequests = await PaymentService.createPaymentRequestsFromXML(parsedXml);
+  const paymentRequests = await PaymentService.createPaymentRequestsForBatch(parsedXml, 'batchId_1');
   return paymentRequests[0];
 }

@@ -1,11 +1,10 @@
 import axios from 'axios';
-import {IPaymentRequest, IPayor, IPayee, IEmployee} from '../models/PaymentRequest';
+import {PaymentRequest, IPaymentRequest, IPayor, IPayee, IEmployee} from '../models/PaymentRequest';
 import {ICorporateEntity, CorporateEntity} from "../models/CorporateEntity";
 import {IIndividualEntity, IndividualEntity} from "../models/IndividualEntity";
-import {Merchant, MerchantDetails} from "../models/Merchant";
 import {PayeeAccount} from "../models/PayeeAccount";
 import {IPayorAccount, PayorAccount} from "../models/PayorAccount";
-import {Payment} from "../models/Payment";
+import {Payment, PaymentStatus} from "../models/Payment";
 
 const METHOD_API_BASE_URL = 'https://dev.methodfi.com';
 const METHOD_API_KEY = process.env.METHOD_API_KEY || 'sk_iUigphRRVh9RpEM8MkTNhWtM';
@@ -17,6 +16,11 @@ const methodApi = axios.create({
     'Content-Type': 'application/json'
   }
 });
+
+export interface MerchantDetails {
+  id: string;
+  name: string;
+}
 
 class MethodApiService {
   async createCorporateEntity(payor: IPayor) {
@@ -120,31 +124,20 @@ class MethodApiService {
     }
   }
 
-  private createAndVerifyPayeeAccount = async (individualEntity: IIndividualEntity, payee: IPayee) => {
+  private createAndVerifyPayeeAccount = async (individualEntity: IIndividualEntity, payee: IPayee, merchantsByPlaidId: Record<string, MerchantDetails>) => {
     let payeeAccount = await PayeeAccount.findOne({ plaidId: payee.plaidId });
     if (payeeAccount) {
       return payeeAccount;
     }
-    let merchant = await Merchant.findOne({ plaidId: payee.plaidId });
-    if (!merchant) { // Repopulate all the merchants if merchant not found
-      const merchantsByPlaidId = await this.getMerchantsByPlaidId();
-      for (const plaidId in merchantsByPlaidId) {
-        const merchant = new Merchant({
-          merchantId: merchantsByPlaidId[plaidId].id,
-          plaidId: plaidId
-        });
-        await merchant.save();
-      }
-      merchant = await Merchant.findOne({ plaidId: payee.plaidId });
-    }
-    if (!merchant) {
-      // Merchant does not exist in Method API
+    // Merchant does not exist in Method API
+    if (!merchantsByPlaidId[payee.plaidId]) {
       throw new Error('Merchant not found for plaidId: ' + payee.plaidId);
     }
+    const merchant = merchantsByPlaidId[payee.plaidId];
     const response = await methodApi.post('/accounts', {
       holder_id: individualEntity.entityId,
       liability: {
-        mch_id: merchant.merchantId,
+        mch_id: merchant.id,
         account_number: payee.loanAccountNumber
       }
     });
@@ -174,29 +167,28 @@ class MethodApiService {
   //   method.open(response.data.data.element_token);
   // }
 
-  async processPaymentRequest(paymentRequest: IPaymentRequest) {
+  // Assuming IPaymentRequest includes status and message fields
+  async processPaymentRequest(paymentRequest: IPaymentRequest, merchantsByPlaidId: Record<string, MerchantDetails>) {
     const { paymentRequestId, employee, payor, payee, amount } = paymentRequest;
-
+    let payment = null;
+    let corporateEntity = null;
+    let individualEntity = null;
+    let payorAccount = null;
+    let payeeAccount = null;
     try {
-      const corporateEntity = await this.createCorporateEntity(payor);
-
-      const individualEntity = await this.createIndividualEntity(employee);
-
-      const payorAccount = await this.createAndVerifyPayorAccount(payor, corporateEntity);
-
-      const payeeAccount = await this.createAndVerifyPayeeAccount(individualEntity, payee);
+      corporateEntity = await this.createCorporateEntity(payor);
+      individualEntity = await this.createIndividualEntity(employee);
+      payorAccount = await this.createAndVerifyPayorAccount(payor, corporateEntity);
+      payeeAccount = await this.createAndVerifyPayeeAccount(individualEntity, payee, merchantsByPlaidId);
 
       const response = await methodApi.post('/payments', {
         amount: amount * 100, // Convert to cents
-        source:  payorAccount.accountId,
-        // destination: payeeAccount.accountId,
-        // IMP: Hardcoding a destination account whose holder is verified using Method Element
-        // Doing this as there is no programmatic way to verify the individual account holder. And we can not deposit payment in unverified individual entities
-        destination: 'acc_6AYf8tqziqzmH',
+        source: payorAccount.accountId,
+        destination: 'acc_6AYf8tqziqzmH', // Hardcoded destination account
         description: `Loan pmt`
       });
 
-      const payment = new Payment({
+      payment = new Payment({
         paymentId: response.data.data.id,
         paymentRequestId: paymentRequestId,
         corporate: corporateEntity.id,
@@ -205,51 +197,57 @@ class MethodApiService {
         payor: payorAccount.id,
         amount: amount,
         createdAt: new Date(),
-        status: response.data.data.status,
-        message: 'Success'
+        status: response.data.data.status == 'pending' ? PaymentStatus.Pending : PaymentStatus.Failed,
+        message: response.data.data.status == 'pending' ?'Success' : 'Failed'
       });
       await payment.save();
     } catch (error: any) {
       console.error('Error processing payment:', error);
-      const payment = new Payment({
-        paymentId: '',
+      payment = new Payment({
+        paymentId: null,
         paymentRequestId: paymentRequestId,
-        corporate: '',
-        employee: '',
-        payee: '',
-        payor: '',
+        corporate: corporateEntity ? corporateEntity.id : null,
+        employee: individualEntity ? individualEntity.id : null,
+        payee: payeeAccount ? payeeAccount.id : null,
+        payor: payorAccount ? payorAccount.id : null,
         createdAt: new Date(),
-        status: 'Failed',
+        status: PaymentStatus.Failed,
         amount: paymentRequest.amount,
         message: error.message
       });
       await payment.save();
     }
+
+    await PaymentRequest.findOneAndUpdate({ paymentRequestId: paymentRequestId }, {
+      status: payment.status,
+      message: payment.message
+    });
   }
 
   async getMerchantsByPlaidId() {
     try {
-      // Make a GET request to the `/merchants` endpoint with plaidId as a query parameter
       const response = await methodApi.get(`/merchants`);
-      // Initialize an empty object to hold the merchants data
-      let merchantsByPlaidId: Record<string, MerchantDetails> = {};      // Check if the response data is not empty
+      let merchantsByPlaidId: Record<string, MerchantDetails> = {};
       if (response.data && response.data.data.length > 0) {
         const merchants = response.data.data;
-        // Iterate through the list of merchants returned by the API
         for (const merchant of merchants) {
-          // Use the merchant's plaid_id as the key and assign the merchant's details as the value
-          for (const plaidId of merchant.provider_ids['plaid']) {
-            merchantsByPlaidId[plaidId] = {
-              id: merchant.id,
-              name: merchant.name,
-            };
+          const uniquePlaidIds = new Set<string>(merchant.provider_ids['plaid']);
+          for (const plaidId of uniquePlaidIds) {
+            if (!merchantsByPlaidId[plaidId]) {
+              merchantsByPlaidId[plaidId] = {
+                id: merchant.id,
+                name: merchant.name,
+              };
+            }
+            else {
+              console.error('plaidId found assigned to more than one merchant:', plaidId, merchant);
+            }
           }
         }
       }
       return merchantsByPlaidId;
     } catch (error) {
       console.error('Error fetching merchants by Plaid ID:', error);
-      // Handle the error appropriately
       throw error;
     }
   }

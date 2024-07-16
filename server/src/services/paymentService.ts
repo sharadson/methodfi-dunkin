@@ -4,14 +4,15 @@ import { v4 as uuid } from 'uuid';
 import {Payment} from "../models/Payment";
 import {CorporateEntity} from "../models/CorporateEntity";
 import {IndividualEntity} from "../models/IndividualEntity";
-import {Merchant} from "../models/Merchant";
 import {PayeeAccount} from "../models/PayeeAccount";
 import {PayorAccount} from "../models/PayorAccount";
+import {PaymentStatus} from "../models/Payment";
 
 export class PaymentService {
-  async createPaymentRequestsFromXML(xmlData: any): Promise<IPaymentRequest[]> {
+  async createPaymentRequestsForBatch(xmlData: any, batchId: string): Promise<IPaymentRequest[]> {
     const paymentRequestsData = xmlData.root.row.map((row: any) => ({
       paymentRequestId: uuid(),
+      batchId: batchId,
       employee: {
         dunkinId: row.Employee[0].DunkinId[0],
         dunkinBranch: row.Employee[0].DunkinBranch[0],
@@ -38,32 +39,12 @@ export class PaymentService {
         plaidId: row.Payee[0].PlaidId[0],
         loanAccountNumber: row.Payee[0].LoanAccountNumber[0]
       },
-      amount: parseFloat(row.Amount[0].replace('$', '')),
-      status: 'Pending'
+      amount: Math.round(parseFloat(row.Amount[0].replace('$', '')) * 100) / 100,
+      status: PaymentStatus.Unprocessed
     }));
     const paymentRequestsDocs = await PaymentRequest.insertMany(paymentRequestsData);
     return paymentRequestsDocs.map(doc => doc.toObject());
   }
-
-  async processPaymentRequests() {
-    const paymentRequests = await PaymentRequest.find();
-
-    for (const paymentRequest of paymentRequests) {
-      await methodApiService.processPaymentRequest(paymentRequest);
-    }
-  }
-
-  async discardPaymentRequests() {
-    console.log('Discarding all payment requests');
-    await PaymentRequest.deleteMany({});
-    await CorporateEntity.deleteMany({});
-    await IndividualEntity.deleteMany({});
-    await Merchant.deleteMany({});
-    await PayeeAccount.deleteMany({});
-    await PayorAccount.deleteMany({});
-    await Payment.deleteMany({});
-  }
-
   async generateReport(type: string): Promise<any> {
     let report;
     if (type === 'totalAmountPerSource') {
@@ -78,6 +59,24 @@ export class PaymentService {
       report = await PaymentRequest.find({}, { employee: 1, amount: 1, status: 1 });
     }
     return report;
+  }
+
+  async discardPaymentRequestsForBatch(batchId: any) {
+    console.log('Setting payment requests status to Discarded for batch:', batchId);
+    await PaymentRequest.updateMany({ batchId: batchId }, { status: PaymentStatus.Discarded });
+  }
+
+  async processPaymentRequestsForBatch(batchId: any) {
+    console.log('Processing payment requests for batch:', batchId);
+    const paymentRequests = await PaymentRequest.find({ batchId: batchId });
+    const merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
+    for (const paymentRequest of paymentRequests) {
+      await methodApiService.processPaymentRequest(paymentRequest, merchantsByPlaidId);
+    }
+  }
+
+  async getPaymentRequestsByBatchId(batchId: any) {
+    return PaymentRequest.find({ batchId: batchId });
   }
 }
 

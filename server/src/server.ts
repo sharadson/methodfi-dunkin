@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import fileUpload from 'express-fileupload';
 import xml2js from 'xml2js';
 import paymentService from './services/paymentService';
+import batchService from './services/batchService';
 import cors from "cors";
 
 const app = express();
@@ -20,33 +21,76 @@ app.post('/api/upload', async (req, res) => {
     return res.status(400).send('No files were uploaded.');
   }
 
-  const xmlFile = (req.files.file as fileUpload.UploadedFile).data.toString('utf8');
+  const uploadedFile = req.files.file as fileUpload.UploadedFile;
+  const xmlFileContent = uploadedFile.data.toString('utf8');
+  const fileName = uploadedFile.name;
 
-  xml2js.parseString(xmlFile, async (err, result) => {
+  xml2js.parseString(xmlFileContent, async (err, result) => {
     if (err) return res.status(500).send('Error parsing XML.');
 
     try {
-      const payments = await paymentService.createPaymentRequestsFromXML(result);
-      res.send(payments);
+      const batchId = await batchService.createBatch(fileName);
+      const payments = await paymentService.createPaymentRequestsForBatch(result, batchId);
+
+      res.send(batchId);
     } catch (error) {
       res.status(500).send('Error saving to database.');
     }
   });
 });
 
-app.post('/api/approve', async (req, res) => {
+
+app.get('/api/batches', async (req, res) => {
   try {
-    const payments = await paymentService.processPaymentRequests();
-    res.send(payments);
+    const batches = await batchService.getAllBatches();
+    res.json(batches);
+  } catch (error) {
+    res.status(500).send('Error fetching batches.');
+  }
+});
+
+app.get('/api/payments', async (req, res) => {
+  const { batchId } = req.query;
+
+  if (!batchId) {
+    return res.status(400).send('Batch ID is required.');
+  }
+
+  try {
+    const payments = await paymentService.getPaymentRequestsByBatchId(batchId);
+    res.json(payments);
+  } catch (error) {
+    res.status(500).send('Error fetching payment requests.');
+  }
+});
+
+app.post('/api/approve', async (req, res) => {
+  const { batchId } = req.query;
+
+  if (!batchId) {
+    return res.status(400).send('Batch ID is required.');
+  }
+
+  try {
+    const payments = await paymentService.processPaymentRequestsForBatch(batchId);
+    res.send({ message: `Payments from batch ${batchId} have been processed.`, processedPayments: payments });
   } catch (error) {
     res.status(500).send('Error processing payments.');
   }
 });
 
 app.post('/api/discard', async (req, res) => {
+  const { batchId } = req.query;
+  console.log('batchId', req.query);
+
+  if (!batchId) {
+    return res.status(400).send('Batch ID is required.');
+  }
+
   try {
-    const payments = await paymentService.discardPaymentRequests();
-    res.send(payments);
+    await batchService.discardBatch(batchId);
+    await paymentService.discardPaymentRequestsForBatch(batchId);
+    res.send({ message: `Payments from batch ${batchId} have been discarded.`});
   } catch (error) {
     res.status(500).send('Error processing payments.');
   }

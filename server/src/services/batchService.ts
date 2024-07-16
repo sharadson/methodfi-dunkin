@@ -1,0 +1,32 @@
+import {Batch} from "../models/Batch";
+import {BatchStatus} from "../models/Batch";
+import {v4 as uuid} from "uuid";
+
+class BatchService {
+  async getAllBatches() {
+    try {
+      return await Batch.find();
+    } catch (error) {
+      console.error("Error fetching batches:", error);
+      throw error;
+    }
+  }
+
+  async createBatch(fileName: string) {
+      const batch = new Batch({ id: uuid(), fileName: fileName, status: BatchStatus.Pending, uploadedAt: new Date() });
+      await batch.save();
+      return batch.id;
+  }
+
+  async discardBatch(batchId: any) {
+    try {
+      await Batch.findOneAndUpdate({ id: batchId }, { status: BatchStatus.Discarded });
+    } catch (error) {
+      console.error('Error discarding batch:', error);
+      throw error;
+    }
+  }
+}
+
+const batchService = new BatchService();
+export default batchService;

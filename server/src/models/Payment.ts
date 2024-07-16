@@ -4,6 +4,13 @@ import { IPayeeAccount } from './PayeeAccount';
 import {ICorporateEntity} from "./CorporateEntity";
 import {IIndividualEntity} from "./IndividualEntity";
 
+export enum PaymentStatus {
+  Unprocessed = "Unprocessed",
+  Pending = "Pending",
+  Processed = "Processed",
+  Failed = "Failed",
+  Discarded = "Discarded"
+}
 
 export interface IPayment extends Document {
   paymentId: string;
@@ -27,7 +34,7 @@ const PaymentSchema: Schema = new Schema({
   payor: { type: String, ref: 'PayorAccount', required: false },
   payee: { type: String, ref: 'PayeeAccount', required: false },
   createdAt: { type: Date, required: true },
-  status: { type: String, required: true },
+  status: { type: String, required: true, enum: Object.values(PaymentStatus) },
   amount: { type: Number, required: true },
   message: { type: String, required: true }
 });

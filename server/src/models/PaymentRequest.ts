@@ -1,4 +1,5 @@
-import mongoose, { Document, Schema, Model, model } from 'mongoose';
+import { Document, Schema, Model, model } from 'mongoose';
+import { PaymentStatus } from './Payment';
 
 // Define TypeScript interfaces
 export interface IEmployee {
@@ -74,11 +75,14 @@ const PayeeSchema: Schema = new Schema({
 });
 
 const PaymentRequestSchema: Schema = new Schema({
+  batchId: { type: String, ref: 'Batch' },
   paymentRequestId: { type: String, required: true },
   employee: { type: EmployeeSchema, required: true },
   payor: { type: PayorSchema, required: true },
   payee: { type: PayeeSchema, required: true },
   amount: { type: Number, required: true },
+  status: { type: String, required: true, enum: Object.values(PaymentStatus) },
+  message: { type: String, default: '' }
 });
 
 
