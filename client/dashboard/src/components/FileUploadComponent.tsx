@@ -4,12 +4,16 @@ import axios from 'axios';
 import Button from '@mui/material/Button';
 import '../App.css';
 
+enum UploadStatus {
+  Uploading = 'Uploading...',
+  Success = 'File uploaded successfully',
+  Failed = 'File upload failed'
+}
+
 const FileUpload: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [uploadStatus, setUploadStatus] = useState<string>('');
-  const successMessage = 'File uploaded successfully';
-
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       setSelectedFile(event.target.files[0]);
@@ -32,14 +36,15 @@ const FileUpload: React.FC = () => {
     formData.append('fileName', fileName);
 
     try {
-      const response = await axios.post('http://localhost:5001/api/upload', formData, {
+      setUploadStatus(UploadStatus.Uploading);
+      await axios.post('http://localhost:5001/api/upload', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
-      setUploadStatus(successMessage);
+      setUploadStatus(UploadStatus.Success);
     } catch (error) {
-      setUploadStatus('File upload failed');
+      setUploadStatus(UploadStatus.Failed);
       console.error('Error uploading file:', error);
     }
   };
@@ -55,7 +60,7 @@ const FileUpload: React.FC = () => {
         variant="contained"
         onClick={handleFileUpload}
         style={{ marginLeft: '10px' }}
-        disabled={!selectedFile || (uploadStatus === successMessage)}
+        disabled={!selectedFile || (uploadStatus === UploadStatus.Success)}
       >
         Upload
       </Button>
@@ -67,8 +72,8 @@ const FileUpload: React.FC = () => {
       >
         Clear
       </Button>
-      <p>{uploadStatus}</p>
       <p>Selected file: {fileName}</p>
+      <p>Upload status: {uploadStatus}</p>
     </div>
   );
 };

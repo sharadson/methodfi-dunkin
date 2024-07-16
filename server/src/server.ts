@@ -121,7 +121,6 @@ app.post('/api/discard', async (req, res) => {
 });
 
 app.get('/api/reports', async (req, res) => {
-  console.log('Generating report', req.query);
   const batchId = req.query.batchId as string || '';
   const reportType = req.query.reportType as string || '';
   if (!batchId || !reportType) {
@@ -129,7 +128,6 @@ app.get('/api/reports', async (req, res) => {
   }
   try {
     const report = await ReportService.generateReport(batchId, reportType);
-    console.log('Report:', report);
     res.json(report);
   } catch (error) {
     console.error('Error generating report:', error);
