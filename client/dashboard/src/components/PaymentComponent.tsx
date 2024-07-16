@@ -3,52 +3,17 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Button from '@mui/material/Button';
+import { PaymentRequest } from '../types/paymentTypes';
+import { Batch } from '../types/batchTypes';
 
-interface PaymentRequest {
-  paymentRequestId: string;
-  employee: {
-    dunkinId: string;
-    firstName: string;
-    lastName: string;
-  };
-  payee: {
-    plaidId: string;
-  };
-  payor: {
-    dunkinId: string;
-    ein: string;
-    name: string;
-  };
-  amount: number;
-  status: string;
-  message: string;
+enum BatchStatus {
+  Pending = 'Pending',
+  Approved = 'Approved',
+  Processing = 'Processing',
+  Processed = 'Processed',
+  Discarded = 'Discarded'
+
 }
-
-interface Batch {
-  id: string;
-  fileName: string;
-  status: string;
-  uploadedAt: string;
-}
-
-const onApprove = async (batchId: string) => {
-  console.log('Approve');
-
-  try {
-    const response = await axios.post(`http://localhost:5001/api/approve?batchId=${batchId}`);
-
-    if (response.status === 200) {
-      console.log('All collections Processed');
-    } else {
-      console.error('Error processing collections:', response.statusText);
-    }
-  } catch (error) {
-    console.error('Error processing collections:', error);
-  }
-};
-
-
-
 
 
 const PaymentComponent = () => {
@@ -88,22 +53,24 @@ const PaymentComponent = () => {
   const fetchBatches = async () => {
     try {
       const response = await axios.get('http://localhost:5001/api/batches');
-      setBatches([...response.data.filter((batch: Batch) => batch.status !== 'Discarded')]);
+      setBatches([...response.data.filter((batch: Batch) => batch.status !== BatchStatus.Discarded)]);
     } catch (error) {
       console.error('Failed to fetch batches:', error);
     }
   };
 
-  const onDiscard = async (batchId: string) => {
-    console.log('Discard', batchId);
-
+  const onDiscard = async () => {
+    if (!selectedBatch) {
+      return;
+    }
+    console.log('Discard', selectedBatch.id);
     try {
-      const response = await axios.post(`http://localhost:5001/api/discard?batchId=${batchId}`);
+      const response = await axios.post(`http://localhost:5001/api/discard?batchId=${selectedBatch.id}`);
 
       if (response.status === 200) {
         console.log('All collections cleared');
         setPayments([]);
-        setBatches(batches.filter(b => b.id !== batchId));
+        setBatches(batches.filter(b => b.id !== selectedBatch.id));
         setSelectedBatch(undefined);
       } else {
         console.error('Error clearing collections:', response.statusText);
@@ -113,73 +80,131 @@ const PaymentComponent = () => {
     }
   };
 
-  const columns = [
-    { field: 'employeeDunkinId', headerName: 'Employee Dunkin ID', width: 200 },
-    { field: 'employeeName', headerName: 'Employee Name', width: 200 },
-    { field: 'payeePlaidId', headerName: 'Payee Plaid ID', width: 200 },
-    { field: 'payorDunkinId', headerName: 'Payor Dunkin ID', width: 200 },
-    { field: 'payorEIN', headerName: 'Payor EIN', width: 200 },
-    { field: 'payorName', headerName: 'Payor Name', width: 200 },
-    { field: 'amount', headerName: 'Amount', width: 200 },
-    { field: 'status', headerName: 'Status', width: 200 },
-    { field: 'message', headerName: 'Message', width: 200 },
-  ];
+  const onProcess = async () => {
+    console.log('Process');
+    if (!selectedBatch) {
+      return;
+    }
+    try {
+      const response = await axios.post(`http://localhost:5001/api/process?batchId=${selectedBatch.id}`);
 
-  const rows = payments.map((payment) => ({
-    id: payment.paymentRequestId,
-    employeeDunkinId: payment.employee.dunkinId,
-    employeeName: `${payment.employee.firstName} ${payment.employee.lastName}`,
-    payeePlaidId: payment.payee.plaidId,
-    payorDunkinId: payment.payor.dunkinId,
-    payorEIN: payment.payor.ein,
-    payorName: payment.payor.name,
-    amount: payment.amount,
-    status: payment.status,
-    message: payment.message,
-  }));
+      if (response.status === 200) {
+        console.log('All collections Processed');
+      } else {
+        console.error('Error processing collections:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error processing collections:', error);
+    }
+  };
 
-  return (
-    <div style={{ height: 400, width: '100%' }}>
-      <h2>Payment Review</h2>
-      <div className="batch-selection" style={{marginBottom: '10px'}}>
-        <select
-          onChange={handleBatchSelection}
-          style={{width: '25%', maxHeight: '150px', overflowY: 'auto'}}
-        >
-          <option value="">Select a batch</option>
-          {batches.map((batch: Batch) => (
-            <option key={batch.id} value={batch.id}>
-              {batch.fileName} - {batch.status}
-            </option>
-          ))}
-        </select>
+  const onApprove = async () => {
+    console.log('Approve');
+    if (selectedBatch) {
+      try {
+        const response = await axios.post(`http://localhost:5001/api/approve?batchId=${selectedBatch.id}`);
+
+        if (response.status === 200) {
+          console.log('Batch approved');
+          setBatches(batches.map(b => b.id === selectedBatch.id ? {...b, status: BatchStatus.Approved} : b));
+        } else {
+          console.error('Error approving batch:', response.statusText);
+        }
+      } catch (error) {
+        console.error('Error approving batch:', error)
+      }
+    }
+  }
+
+    const onRefresh = async () => {
+      await fetchBatches();
+      if (selectedBatch) {
+        await fetchPayments();
+      }
+    };
+
+    const columns = [
+      {field: 'employeeDunkinId', headerName: 'Employee Dunkin ID', width: 200},
+      {field: 'employeeName', headerName: 'Employee Name', width: 200},
+      {field: 'payeePlaidId', headerName: 'Payee Plaid ID', width: 200},
+      {field: 'payorDunkinId', headerName: 'Payor Dunkin ID', width: 200},
+      {field: 'payorEIN', headerName: 'Payor EIN', width: 200},
+      {field: 'payorName', headerName: 'Payor Name', width: 200},
+      {field: 'amount', headerName: 'Amount', width: 200},
+      {field: 'status', headerName: 'Status', width: 200},
+      {field: 'message', headerName: 'Message', width: 200},
+    ];
+
+    const rows = payments.map((payment) => ({
+      id: payment.paymentRequestId,
+      employeeDunkinId: payment.employee.dunkinId,
+      employeeName: `${payment.employee.firstName} ${payment.employee.lastName}`,
+      payeePlaidId: payment.payee.plaidId,
+      payorDunkinId: payment.payor.dunkinId,
+      payorEIN: payment.payor.ein,
+      payorName: payment.payor.name,
+      amount: payment.amount,
+      status: payment.status,
+      message: payment.message,
+    }));
+
+    return (
+      <div style={{height: 400, width: '100%'}}>
+        <h2>Payment Review</h2>
+        <div className="batch-selection" style={{display: 'flex', alignItems: 'center', marginBottom: '10px'}}>
+          <select
+            onChange={handleBatchSelection}
+            value={selectedBatch?.id || ''}
+            style={{width: '25%', height: '35px', maxHeight: '150px', overflowY: 'auto', marginRight: '10px'}}
+          >
+            <option value="">Select a batch</option>
+            {batches.map((batch: Batch) => (
+              <option key={batch.id} value={batch.id}>
+                {batch.fileName} - {batch.status}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="contained"
+            onClick={onProcess}
+            style={{marginRight: '10px'}}
+            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Approved}
+          >
+            Process
+          </Button>
+          <Button
+            variant="contained"
+            onClick={onRefresh}
+            disabled={!selectedBatch}
+          >
+            Refresh
+          </Button>
+        </div>
+        <div className="payment-actions" style={{display: 'flex', justifyContent: 'flex-start', marginBottom: '20px'}}>
+          <Button
+            variant="contained"
+            onClick={() => selectedBatch && onApprove()}
+            style={{marginRight: '10px'}}
+            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Pending}
+          >
+            Approve
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => selectedBatch && onDiscard()}
+            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Pending}
+          >
+            Discard
+          </Button>
+        </div>
+        <DataGrid
+          rows={rows}
+          columns={columns}
+          checkboxSelection
+          pagination
+        />
       </div>
-      <div className="payment-actions" style={{display: 'flex', justifyContent: 'flex-start', marginBottom: '20px'}}>
-        <Button
-          variant="contained"
-          onClick={() => selectedBatch && onApprove(selectedBatch.id)}
-          style={{marginRight: '10px'}}
-          disabled={!selectedBatch}
-        >
-          Approve
-        </Button>
-        <Button
-          variant="contained"
-          onClick={() => selectedBatch && onDiscard(selectedBatch.id)}
-          disabled={!selectedBatch}
-        >
-          Discard
-        </Button>
-      </div>
-      <DataGrid
-        rows={rows}
-        columns={columns}
-        checkboxSelection
-        pagination
-      />
-    </div>
-  );
-};
-
+    );
+  };
 
 export default PaymentComponent;

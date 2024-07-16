@@ -6,6 +6,7 @@ import xml2js from 'xml2js';
 import paymentService from './services/paymentService';
 import batchService from './services/batchService';
 import cors from "cors";
+import {BatchStatus} from "./models/Batch";
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -65,6 +66,26 @@ app.get('/api/payments', async (req, res) => {
 });
 
 app.post('/api/approve', async (req, res) => {
+  const { batchId } = req.query; // or req.body, depending on how you send data
+
+  if (!batchId) {
+    return res.status(400).send('Batch ID is required.');
+  }
+
+  try {
+    const batch = await batchService.getBatchById(batchId); // Assuming this method exists
+    if (!batch) {
+      return res.status(404).send('Batch not found.');
+    }
+
+    await batchService.updateBatchStatus(batchId, BatchStatus.Approved);
+    res.send({ message: `Batch ${batchId} has been approved.` });
+  } catch (error) {
+    res.status(500).send('Error approving batch.');
+  }
+});
+
+app.post('/api/process', async (req, res) => {
   const { batchId } = req.query;
 
   if (!batchId) {
@@ -72,7 +93,9 @@ app.post('/api/approve', async (req, res) => {
   }
 
   try {
+    await batchService.updateBatchStatus(batchId, BatchStatus.Processing);
     const payments = await paymentService.processPaymentRequestsForBatch(batchId);
+    await batchService.updateBatchStatus(batchId, BatchStatus.Processed);
     res.send({ message: `Payments from batch ${batchId} have been processed.`, processedPayments: payments });
   } catch (error) {
     res.status(500).send('Error processing payments.');
@@ -88,7 +111,7 @@ app.post('/api/discard', async (req, res) => {
   }
 
   try {
-    await batchService.discardBatch(batchId);
+    await batchService.updateBatchStatus(batchId, BatchStatus.Discarded);
     await paymentService.discardPaymentRequestsForBatch(batchId);
     res.send({ message: `Payments from batch ${batchId} have been discarded.`});
   } catch (error) {

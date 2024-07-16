@@ -13,16 +13,25 @@ class BatchService {
   }
 
   async createBatch(fileName: string) {
-      const batch = new Batch({ id: uuid(), fileName: fileName, status: BatchStatus.Pending, uploadedAt: new Date() });
-      await batch.save();
-      return batch.id;
+    const batch = new Batch({id: uuid(), fileName: fileName, status: BatchStatus.Pending, uploadedAt: new Date()});
+    await batch.save();
+    return batch.id;
   }
 
-  async discardBatch(batchId: any) {
+  async getBatchById(batchId: any) {
     try {
-      await Batch.findOneAndUpdate({ id: batchId }, { status: BatchStatus.Discarded });
+      return await Batch.findOne({id: batchId});
     } catch (error) {
-      console.error('Error discarding batch:', error);
+      console.error('Error fetching batch:', error);
+      throw error;
+    }
+  }
+
+  async updateBatchStatus(batchId: any, status: BatchStatus) {
+    try {
+      await Batch.findOneAndUpdate({id: batchId}, {status: status});
+    } catch (error) {
+      console.error('Error updating batch status:', error);
       throw error;
     }
   }
