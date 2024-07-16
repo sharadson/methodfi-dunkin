@@ -4,16 +4,7 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Button from '@mui/material/Button';
 import { PaymentRequest } from '../types/paymentTypes';
-import { Batch } from '../types/batchTypes';
-
-enum BatchStatus {
-  Pending = 'Pending',
-  Approved = 'Approved',
-  Processing = 'Processing',
-  Processed = 'Processed',
-  Discarded = 'Discarded'
-
-}
+import { Batch, BatchStatus } from '../types/batchTypes';
 
 
 const PaymentComponent = () => {
@@ -86,9 +77,14 @@ const PaymentComponent = () => {
       return;
     }
     try {
+      selectedBatch.status = BatchStatus.Processing;
+      setBatches(batches.map(b => b.id === selectedBatch.id ? {...b, status: BatchStatus.Processing} : b));
       const response = await axios.post(`http://localhost:5001/api/process?batchId=${selectedBatch.id}`);
 
       if (response.status === 200) {
+        selectedBatch.status = BatchStatus.Processed;
+        setBatches(batches.map(b => b.id === selectedBatch.id ? {...b, status: BatchStatus.Processed} : b));
+        onRefresh();
         console.log('All collections Processed');
       } else {
         console.error('Error processing collections:', response.statusText);
@@ -106,6 +102,7 @@ const PaymentComponent = () => {
 
         if (response.status === 200) {
           console.log('Batch approved');
+          selectedBatch.status = BatchStatus.Approved;
           setBatches(batches.map(b => b.id === selectedBatch.id ? {...b, status: BatchStatus.Approved} : b));
         } else {
           console.error('Error approving batch:', response.statusText);
@@ -150,7 +147,7 @@ const PaymentComponent = () => {
 
     return (
       <div style={{height: 400, width: '100%'}}>
-        <h2>Payment Review</h2>
+        <h2>Payments</h2>
         <div className="batch-selection" style={{display: 'flex', alignItems: 'center', marginBottom: '10px'}}>
           <select
             onChange={handleBatchSelection}
@@ -175,7 +172,7 @@ const PaymentComponent = () => {
           <Button
             variant="contained"
             onClick={onRefresh}
-            disabled={!selectedBatch}
+            disabled={!selectedBatch || selectedBatch.status === BatchStatus.Processed}
           >
             Refresh
           </Button>

@@ -10,7 +10,7 @@ export interface IIndividualEntity extends Document {
 const IndividualEntitySchema: Schema = new Schema({
   entityId: { type: String, required: true },
   dunkinId: { type: String, required: true },
-  dunkinBranch: { type: String, required: true }, // Adding redundancy to the schema for the reporting purposes
+  dunkinBranch: { type: String, required: true },
 });
 
 export const IndividualEntity = mongoose.model<IIndividualEntity>('IndividualEntity', IndividualEntitySchema);

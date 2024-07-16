@@ -7,6 +7,7 @@ import paymentService from './services/paymentService';
 import batchService from './services/batchService';
 import cors from "cors";
 import {BatchStatus} from "./models/Batch";
+import ReportService from "./services/reportService";
 
 const app = express();
 const port = process.env.PORT || 5001;
@@ -119,12 +120,19 @@ app.post('/api/discard', async (req, res) => {
   }
 });
 
-app.get('/api/reports/:type', async (req, res) => {
-  const reportType = req.params.type;
+app.get('/api/reports', async (req, res) => {
+  console.log('Generating report', req.query);
+  const batchId = req.query.batchId as string || '';
+  const reportType = req.query.reportType as string || '';
+  if (!batchId || !reportType) {
+    return res.status(400).send('Batch ID and report type are required.');
+  }
   try {
-    const report = await paymentService.generateReport(reportType);
-    res.send(report);
+    const report = await ReportService.generateReport(batchId, reportType);
+    console.log('Report:', report);
+    res.json(report);
   } catch (error) {
+    console.error('Error generating report:', error);
     res.status(500).send('Error generating report.');
   }
 });

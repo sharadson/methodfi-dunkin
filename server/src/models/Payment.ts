@@ -28,11 +28,14 @@ export interface IPayment extends Document {
 
 const PaymentSchema: Schema = new Schema({
   paymentId : { type: String, required: false },
+  batchId: { type: String, ref: 'Batch', required: false },
   paymentRequestId: { type: String, required: true },
   corporate: { type: String, ref: 'CorporateEntity', required: false },
   employee: { type: String, ref: 'IndividualEntity', required: false },
   payor: { type: String, ref: 'PayorAccount', required: false },
   payee: { type: String, ref: 'PayeeAccount', required: false },
+  employeeDunkinId: { type: String, required: false },
+  payorDunkinId: { type: String, required: false },
   createdAt: { type: Date, required: true },
   status: { type: String, required: true, enum: Object.values(PaymentStatus) },
   amount: { type: Number, required: true },

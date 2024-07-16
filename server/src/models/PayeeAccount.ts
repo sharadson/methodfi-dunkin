@@ -1,4 +1,3 @@
-// PayeeAccount.ts
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IPayeeAccount extends Document {
@@ -10,7 +9,7 @@ export interface IPayeeAccount extends Document {
 const PayeeAccountSchema: Schema = new Schema({
   accountId: { type: String, required: true },
   plaidId: { type: String, required: true },
-  entityId: { type: String, required: true }, // Adding redundancy
+  entityId: { type: String, required: true },
 });
 
 export const PayeeAccount = mongoose.model<IPayeeAccount>('PayeeAccount', PayeeAccountSchema);

@@ -1,11 +1,6 @@
 import {IPaymentRequest, PaymentRequest} from '../models/PaymentRequest';
 import methodApiService from './methodApiService';
 import { v4 as uuid } from 'uuid';
-import {Payment} from "../models/Payment";
-import {CorporateEntity} from "../models/CorporateEntity";
-import {IndividualEntity} from "../models/IndividualEntity";
-import {PayeeAccount} from "../models/PayeeAccount";
-import {PayorAccount} from "../models/PayorAccount";
 import {PaymentStatus} from "../models/Payment";
 
 export class PaymentService {
@@ -71,7 +66,7 @@ export class PaymentService {
     const paymentRequests = await PaymentRequest.find({ batchId: batchId });
     const merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
     for (const paymentRequest of paymentRequests) {
-      await methodApiService.processPaymentRequest(paymentRequest, merchantsByPlaidId);
+      await methodApiService.processPaymentRequest(batchId, paymentRequest, merchantsByPlaidId);
     }
   }
 

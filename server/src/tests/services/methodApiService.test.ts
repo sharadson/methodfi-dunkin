@@ -20,6 +20,8 @@ afterAll(async () => {
   await mongoose.connection.close();
 });
 
+let batchId = 'batchId_1';
+
 describe('Process PaymentRequest Uploaded via XML', () => {
   it('should upload an XML, parse it, and process a paymentRequest', async () => {
     const xmlFilePath = path.join(__dirname, '..', 'data', 'paymentRequest.xml');
@@ -29,7 +31,7 @@ describe('Process PaymentRequest Uploaded via XML', () => {
 
     const paymentRequest = await convertXmlToPaymentRequest(parsedXml);
     const merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
-    await MethodApiService.processPaymentRequest(paymentRequest, merchantsByPlaidId);
+    await MethodApiService.processPaymentRequest(batchId, paymentRequest, merchantsByPlaidId);
 
     const payment = await Payment.findOne({ paymentRequestId: paymentRequest.paymentRequestId });
     expect(payment?.status).toBe('pending');
@@ -37,6 +39,6 @@ describe('Process PaymentRequest Uploaded via XML', () => {
 });
 
 async function convertXmlToPaymentRequest(parsedXml: any): Promise<IPaymentRequest> {
-  const paymentRequests = await PaymentService.createPaymentRequestsForBatch(parsedXml, 'batchId_1');
+  const paymentRequests = await PaymentService.createPaymentRequestsForBatch(parsedXml, batchId);
   return paymentRequests[0];
 }

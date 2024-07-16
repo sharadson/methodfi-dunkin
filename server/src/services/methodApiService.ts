@@ -168,7 +168,7 @@ class MethodApiService {
   // }
 
   // Assuming IPaymentRequest includes status and message fields
-  async processPaymentRequest(paymentRequest: IPaymentRequest, merchantsByPlaidId: Record<string, MerchantDetails>) {
+  async processPaymentRequest(batchId: string, paymentRequest: IPaymentRequest, merchantsByPlaidId: Record<string, MerchantDetails>) {
     const { paymentRequestId, employee, payor, payee, amount } = paymentRequest;
     let payment = null;
     let corporateEntity = null;
@@ -184,17 +184,20 @@ class MethodApiService {
       const response = await methodApi.post('/payments', {
         amount: amount * 100, // Convert to cents
         source: payorAccount.accountId,
-        destination: 'acc_6AYf8tqziqzmH', // Hardcoded destination account
+        destination: 'acc_6AYf8tqziqzmH', // Hardcoded destination account that belongs to active user
         description: `Loan pmt`
       });
 
       payment = new Payment({
         paymentId: response.data.data.id,
+        batchId: batchId,
         paymentRequestId: paymentRequestId,
         corporate: corporateEntity.id,
         employee: individualEntity.id,
         payee: payeeAccount.id,
         payor: payorAccount.id,
+        employeeDunkinId: individualEntity.dunkinId,
+        payorDunkinId: payor.dunkinId,
         amount: amount,
         createdAt: new Date(),
         status: response.data.data.status == 'pending' ? PaymentStatus.Pending : PaymentStatus.Failed,
@@ -205,11 +208,14 @@ class MethodApiService {
       console.error('Error processing payment:', error);
       payment = new Payment({
         paymentId: null,
+        batchId: batchId,
         paymentRequestId: paymentRequestId,
         corporate: corporateEntity ? corporateEntity.id : null,
         employee: individualEntity ? individualEntity.id : null,
         payee: payeeAccount ? payeeAccount.id : null,
         payor: payorAccount ? payorAccount.id : null,
+        employeeDunkinId: individualEntity? individualEntity.dunkinId: null,
+        payorDunkinId: payor? payor.dunkinId : null,
         createdAt: new Date(),
         status: PaymentStatus.Failed,
         amount: paymentRequest.amount,
