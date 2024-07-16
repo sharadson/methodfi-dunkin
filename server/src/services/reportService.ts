@@ -68,6 +68,11 @@ export class ReportService {
         }
       },
       {
+        $addFields: {
+          totalAmount: { $round: ["$totalAmount", 2] }
+        }
+      },
+      {
         $project: {
           branch: "$_id",
           totalAmount: 1,

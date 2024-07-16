@@ -45,7 +45,7 @@ export class PaymentService {
         plaidId: row.Payee[0].PlaidId[0],
         loanAccountNumber: row.Payee[0].LoanAccountNumber[0]
       },
-      amount: Math.round(parseFloat(row.Amount[0].replace('$', '')) * 100) / 100,
+      amount: row.Amount[0].replace('$', ''),
       status: PaymentStatus.Unprocessed
     }));
     const paymentRequestsDocs = await PaymentRequest.insertMany(paymentRequestsData);

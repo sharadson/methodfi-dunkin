@@ -39,7 +39,7 @@ export interface IPaymentRequest extends Document {
   employee: IEmployee;
   payor: IPayor;
   payee: IPayee;
-  amount: number;
+  amount: string;
 }
 
 // Define Mongoose schemas

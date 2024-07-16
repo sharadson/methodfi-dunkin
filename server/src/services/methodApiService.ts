@@ -191,9 +191,11 @@ class MethodApiService {
 
 
       const response = await methodApi.post('/payments', {
-        amount: amount * 100, // Convert to cents
+        amount: Math.round(parseFloat(amount) * 100),
         source: payorAccount.accountId,
-        destination: 'acc_6AYf8tqziqzmH', // Hardcoded destination account that belongs to active user
+        // IMP: FOr demo purpose: Hardcoded individual destination account that belongs to active user verified
+        // using method Element UI workflow (SMS verification etc)
+        destination: 'acc_6AYf8tqziqzmH',
         description: `Loan pmt`
       });
 
