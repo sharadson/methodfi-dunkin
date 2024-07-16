@@ -15,7 +15,7 @@ function App() {
       <div className="sidebar">
         <button className={getTabButtonClassName('upload')} onClick={() => setActiveTab('upload')}>Upload</button>
         <button className={getTabButtonClassName('payment')} onClick={() => setActiveTab('payment')}>Payments</button>
-        <button className={getTabButtonClassName('report')} onClick={() => setActiveTab('report')}>Report</button>
+        <button className={getTabButtonClassName('report')} onClick={() => setActiveTab('report')}>Reports</button>
       </div>
       <div className="content">
         {activeTab === 'upload' && <FileUploadComponent/>}

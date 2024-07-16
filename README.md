@@ -6,9 +6,7 @@ This project consists of a client-side application built with React and TypeScri
 
 1. [Prerequisites](#prerequisites)
 2. [Client Side Application](#client-side-application)
-    - [Getting Started](#getting-started-client)
 3. [Server Side Application](#server-side-application)
-    - [Getting Started](#getting-started-server)
 4. [Steps for End Users](#steps-for-end-users)
 
 ## Prerequisites
@@ -31,8 +29,6 @@ mongo --version
 
 ## Client Side Application
 
-### Getting Started {#getting-started-client}
-
 To get the client application running locally:
 
 1. Clone this repository: `https://github.com/sharadson/methodfi-dunkin.git`
@@ -41,8 +37,6 @@ To get the client application running locally:
 4. Start the development server with `npm start`.
 
 ## Server Side Application
-
-### Getting Started {#getting-started-server}
 
 To get the server application running locally:
 
