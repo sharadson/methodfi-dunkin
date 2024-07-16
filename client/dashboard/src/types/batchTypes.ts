@@ -6,7 +6,7 @@ export interface Batch {
 }
 
 export enum BatchStatus {
-  Pending = 'Pending',
+  Unapproved = 'Unapproved',
   Approved = 'Approved',
   Processing = 'Processing',
   Processed = 'Processed',

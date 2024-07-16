@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { v4 as uuid } from 'uuid';
 
 export enum BatchStatus {
-  Pending = 'Pending',
+  Unapproved = 'Unapproved',
   Approved = 'Approved',
   Processing = 'Processing',
   Processed = 'Processed',
@@ -19,7 +19,7 @@ export interface IBatch extends mongoose.Document {
 const batchSchema = new mongoose.Schema({
   id: { type: String, default: uuid(), unique: true, required: true },
   fileName: { type: String, required: true },
-  status: { type: String, enum: Object.values(BatchStatus), default: BatchStatus.Pending },
+  status: { type: String, enum: Object.values(BatchStatus), default: BatchStatus.Unapproved },
   uploadedAt: { type: Date, default: Date.now }
 });
 

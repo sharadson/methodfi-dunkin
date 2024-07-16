@@ -13,7 +13,7 @@ class BatchService {
   }
 
   async createBatch(fileName: string) {
-    const batch = new Batch({id: uuid(), fileName: fileName, status: BatchStatus.Pending, uploadedAt: new Date()});
+    const batch = new Batch({id: uuid(), fileName: fileName, status: BatchStatus.Unapproved, uploadedAt: new Date()});
     await batch.save();
     return batch.id;
   }

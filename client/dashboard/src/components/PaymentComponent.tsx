@@ -182,14 +182,14 @@ const PaymentComponent = () => {
             variant="contained"
             onClick={() => selectedBatch && onApprove()}
             style={{marginRight: '10px'}}
-            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Pending}
+            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Unapproved}
           >
             Approve
           </Button>
           <Button
             variant="contained"
             onClick={() => selectedBatch && onDiscard()}
-            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Pending}
+            disabled={!selectedBatch || selectedBatch.status !== BatchStatus.Unapproved}
           >
             Discard
           </Button>
