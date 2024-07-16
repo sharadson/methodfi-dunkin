@@ -3,7 +3,7 @@ import path from 'path';
 import mongoose from 'mongoose';
 import { IPaymentRequest } from '../../models/PaymentRequest';
 import MethodApiService from '../../services/methodApiService';
-import PaymentService from "../../services/paymentService";
+import PaymentService, {MethodCache} from "../../services/paymentService";
 import xml2js from 'xml2js';
 import { Payment } from "../../models/Payment";
 import methodApiService from "../../services/methodApiService";
@@ -21,6 +21,14 @@ afterAll(async () => {
 });
 
 let batchId = 'batchId_1';
+const methodCache: MethodCache = {
+  corporateEntities: {},
+  individualEntities: {},
+  payorAccounts: {},
+  payeeAccounts: {},
+  merchantsByPlaidId: {}
+};
+
 
 describe('Process PaymentRequest Uploaded via XML', () => {
   it('should upload an XML, parse it, and process a paymentRequest', async () => {
@@ -31,7 +39,7 @@ describe('Process PaymentRequest Uploaded via XML', () => {
 
     const paymentRequest = await convertXmlToPaymentRequest(parsedXml);
     const merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
-    await MethodApiService.processPaymentRequest(batchId, paymentRequest, merchantsByPlaidId);
+    await MethodApiService.processPaymentRequest(batchId, paymentRequest, methodCache);
 
     const payment = await Payment.findOne({ paymentRequestId: paymentRequest.paymentRequestId });
     expect(payment?.status).toBe('pending');

@@ -10,7 +10,7 @@ export interface IPayorAccount extends Document {
 const PayorAccountSchema: Schema = new Schema({
   accountId: { type: String, required: true },
   dunkinId: { type: String, required: true },
-  entityId: { type: String, required: true }, // Adding redundancy
+  entityId: { type: String, required: true },
 });
 
 export const PayorAccount = mongoose.model<IPayorAccount>('PayorAccount', PayorAccountSchema);

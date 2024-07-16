@@ -5,6 +5,7 @@ import {IIndividualEntity, IndividualEntity} from "../models/IndividualEntity";
 import {PayeeAccount} from "../models/PayeeAccount";
 import {IPayorAccount, PayorAccount} from "../models/PayorAccount";
 import {Payment, PaymentStatus} from "../models/Payment";
+import {MethodCache} from "./paymentService";
 
 const METHOD_API_BASE_URL = 'https://dev.methodfi.com';
 const METHOD_API_KEY = process.env.METHOD_API_KEY || 'sk_iUigphRRVh9RpEM8MkTNhWtM';
@@ -17,17 +18,13 @@ const methodApi = axios.create({
   }
 });
 
-export interface MerchantDetails {
+export interface IMerchantDetail {
   id: string;
   name: string;
 }
 
 class MethodApiService {
   async createCorporateEntity(payor: IPayor) {
-    let corporateEntity = await CorporateEntity.findOne({ ein: payor.ein });
-    if (corporateEntity) {
-      return corporateEntity;
-    }
     const {name, dba, ein, address} = payor;
     const response = await methodApi.post('/entities', {
       type: 'corporation',
@@ -44,7 +41,7 @@ class MethodApiService {
         zip: address.zip
       }
     });
-    corporateEntity = new CorporateEntity({
+    let corporateEntity = new CorporateEntity({
       entityId: response.data.data.id, ein: ein
     });
     await corporateEntity.save();
@@ -53,10 +50,6 @@ class MethodApiService {
 
   async createIndividualEntity(employee: IEmployee) {
     const { firstName, lastName, dob, dunkinId, dunkinBranch } = employee;
-    let individualEntity = await IndividualEntity.findOne({ dunkinId });
-    if (individualEntity) {
-      return individualEntity;
-    }
     const [month, day, year] = employee.dob.split("-");
     const formattedDob = `${year}-${month}-${day}`;
 
@@ -69,7 +62,7 @@ class MethodApiService {
         phone: '+15121231111' // Hardcoded coded phone number as suggested
       }
     });
-    individualEntity = new IndividualEntity({
+    let individualEntity = new IndividualEntity({
       entityId: response.data.data.id,
       dunkinId: dunkinId,
       dunkinBranch: dunkinBranch
@@ -79,11 +72,7 @@ class MethodApiService {
   }
 
   async createAndVerifyPayorAccount(payor: IPayor, corporateEntity: ICorporateEntity) {
-    const { accountNumber, abaRouting, dunkinId } = payor;
-    let payorAccount = await PayorAccount.findOne({ accountNumber: accountNumber, abaRouting: abaRouting });
-    if (payorAccount) {
-      return payorAccount;
-    }
+    const {dunkinId } = payor;
     const response = await methodApi.post('/accounts', {
       holder_id: corporateEntity.entityId,
       ach: {
@@ -92,7 +81,7 @@ class MethodApiService {
         type: 'checking',
       }
     });
-    payorAccount = new PayorAccount({
+    let payorAccount = new PayorAccount({
       accountId: response.data.data.id, dunkinId: dunkinId, entityId: corporateEntity.entityId
     });
     await payorAccount.save();
@@ -124,11 +113,7 @@ class MethodApiService {
     }
   }
 
-  private createAndVerifyPayeeAccount = async (individualEntity: IIndividualEntity, payee: IPayee, merchantsByPlaidId: Record<string, MerchantDetails>) => {
-    let payeeAccount = await PayeeAccount.findOne({ plaidId: payee.plaidId });
-    if (payeeAccount) {
-      return payeeAccount;
-    }
+  private createAndVerifyPayeeAccount = async (individualEntity: IIndividualEntity, payee: IPayee, merchantsByPlaidId: Record<string, IMerchantDetail>) => {
     // Merchant does not exist in Method API
     if (!merchantsByPlaidId[payee.plaidId]) {
       throw new Error('Merchant not found for plaidId: ' + payee.plaidId);
@@ -141,10 +126,11 @@ class MethodApiService {
         account_number: payee.loanAccountNumber
       }
     });
-    payeeAccount = new PayeeAccount({
+    let payeeAccount = new PayeeAccount({
       accountId: response.data.data.id, plaidId: payee.plaidId, entityId: individualEntity.entityId
     });
     await payeeAccount.save();
+    // Payee verification can not be done only on server side
     // await this.verifyPayeeAccount(payeeAccount);
     return payeeAccount
   }
@@ -167,8 +153,7 @@ class MethodApiService {
   //   method.open(response.data.data.element_token);
   // }
 
-  // Assuming IPaymentRequest includes status and message fields
-  async processPaymentRequest(batchId: string, paymentRequest: IPaymentRequest, merchantsByPlaidId: Record<string, MerchantDetails>) {
+  async processPaymentRequest(batchId: string, paymentRequest: IPaymentRequest, cache: MethodCache) {
     const { paymentRequestId, employee, payor, payee, amount } = paymentRequest;
     let payment = null;
     let corporateEntity = null;
@@ -176,10 +161,34 @@ class MethodApiService {
     let payorAccount = null;
     let payeeAccount = null;
     try {
-      corporateEntity = await this.createCorporateEntity(payor);
-      individualEntity = await this.createIndividualEntity(employee);
-      payorAccount = await this.createAndVerifyPayorAccount(payor, corporateEntity);
-      payeeAccount = await this.createAndVerifyPayeeAccount(individualEntity, payee, merchantsByPlaidId);
+      if (cache.corporateEntities[payor.ein]) {
+        corporateEntity = cache.corporateEntities[payor.ein];
+      } else {
+        corporateEntity = await this.createCorporateEntity(payor);
+        cache.corporateEntities[payor.ein] = corporateEntity;
+      }
+
+      if (cache.individualEntities[employee.dunkinId]) {
+        individualEntity = cache.individualEntities[employee.dunkinId];
+      } else {
+        individualEntity = await this.createIndividualEntity(employee);
+        cache.individualEntities[employee.dunkinId] = individualEntity;
+      }
+
+      if (cache.payorAccounts[payor.dunkinId]) {
+        payorAccount = cache.payorAccounts[payor.dunkinId];
+      } else {
+        payorAccount = await this.createAndVerifyPayorAccount(payor, corporateEntity);
+        cache.payorAccounts[payor.dunkinId] = payorAccount;
+      }
+
+      if (cache.payeeAccounts[payee.plaidId]) {
+        payeeAccount = cache.payeeAccounts[payee.plaidId];
+      } else {
+        payeeAccount = await this.createAndVerifyPayeeAccount(individualEntity, payee, cache.merchantsByPlaidId);
+        cache.payeeAccounts[payee.plaidId] = payeeAccount;
+      }
+
 
       const response = await methodApi.post('/payments', {
         amount: amount * 100, // Convert to cents
@@ -233,7 +242,7 @@ class MethodApiService {
   async getMerchantsByPlaidId() {
     try {
       const response = await methodApi.get(`/merchants`);
-      let merchantsByPlaidId: Record<string, MerchantDetails> = {};
+      let merchantsByPlaidId: Record<string, IMerchantDetail> = {};
       if (response.data && response.data.data.length > 0) {
         const merchants = response.data.data;
         for (const merchant of merchants) {

@@ -1,8 +1,19 @@
 import {IPaymentRequest, PaymentRequest} from '../models/PaymentRequest';
-import methodApiService from './methodApiService';
-import { v4 as uuid } from 'uuid';
+import methodApiService, {IMerchantDetail} from './methodApiService';
+import {v4 as uuid} from 'uuid';
 import {PaymentStatus} from "../models/Payment";
+import {IPayeeAccount, PayeeAccount} from "../models/PayeeAccount";
+import {IPayorAccount, PayorAccount} from "../models/PayorAccount";
+import {IIndividualEntity, IndividualEntity} from "../models/IndividualEntity";
+import {CorporateEntity, ICorporateEntity} from "../models/CorporateEntity";
 
+export interface MethodCache {
+  corporateEntities: Record<string, ICorporateEntity>;
+  individualEntities: Record<string, IIndividualEntity>;
+  payorAccounts: Record<string, IPayorAccount>;
+  payeeAccounts: Record<string, IPayeeAccount>;
+  merchantsByPlaidId: Record<string, IMerchantDetail>;
+}
 export class PaymentService {
   async createPaymentRequestsForBatch(xmlData: any, batchId: string): Promise<IPaymentRequest[]> {
     const paymentRequestsData = xmlData.root.row.map((row: any) => ({
@@ -40,21 +51,6 @@ export class PaymentService {
     const paymentRequestsDocs = await PaymentRequest.insertMany(paymentRequestsData);
     return paymentRequestsDocs.map(doc => doc.toObject());
   }
-  async generateReport(type: string): Promise<any> {
-    let report;
-    if (type === 'totalAmountPerSource') {
-      report = await PaymentRequest.aggregate([
-        { $group: { _id: '$payor.DunkinId', totalAmount: { $sum: '$amount' } } }
-      ]);
-    } else if (type === 'totalAmountPerBranch') {
-      report = await PaymentRequest.aggregate([
-        { $group: { _id: '$employee.DunkinBranch', totalAmount: { $sum: '$amount' } } }
-      ]);
-    } else if (type === 'paymentStatus') {
-      report = await PaymentRequest.find({}, { employee: 1, amount: 1, status: 1 });
-    }
-    return report;
-  }
 
   async discardPaymentRequestsForBatch(batchId: any) {
     console.log('Setting payment requests status to Discarded for batch:', batchId);
@@ -63,10 +59,40 @@ export class PaymentService {
 
   async processPaymentRequestsForBatch(batchId: any) {
     console.log('Processing payment requests for batch:', batchId);
+
+    const methodCache: MethodCache = {
+      corporateEntities: {},
+      individualEntities: {},
+      payorAccounts: {},
+      payeeAccounts: {},
+      merchantsByPlaidId: {}
+    };
+
+    const corporateEntitiesList = await CorporateEntity.find();
+    corporateEntitiesList.forEach(entity => {
+      methodCache.corporateEntities[entity.ein] = entity;
+    });
+
+    const individualEntitiesList = await IndividualEntity.find();
+    individualEntitiesList.forEach(entity => {
+      methodCache.individualEntities[entity.dunkinId] = entity;
+    });
+
+    const payorAccountsList = await PayorAccount.find();
+    payorAccountsList.forEach(account => {
+      methodCache.payorAccounts[account.dunkinId] = account;
+    });
+
+    const payeeAccountsList = await PayeeAccount.find();
+    payeeAccountsList.forEach(account => {
+      methodCache.payeeAccounts[account.plaidId] = account;
+    });
+
+    methodCache.merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
+
     const paymentRequests = await PaymentRequest.find({ batchId: batchId });
-    const merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
     for (const paymentRequest of paymentRequests) {
-      await methodApiService.processPaymentRequest(batchId, paymentRequest, merchantsByPlaidId);
+      await methodApiService.processPaymentRequest(batchId, paymentRequest, methodCache);
     }
   }
 
