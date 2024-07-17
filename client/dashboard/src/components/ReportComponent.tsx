@@ -148,7 +148,7 @@ const ReportComponent: React.FC = () => {
         <Tab label="Total Amount Per Branch"/>
         <Tab label="Payment Status"/>
       </Tabs>
-      <div style={{height: 400, width: '100%'}}>
+      <div style={{height: 750, width: '100%'}}>
         <DataGrid
           rows={rowsByReportType[reportTypes[activeTab]]}
           columns={columns[reportTypes[activeTab] as keyof typeof columns]}

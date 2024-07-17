@@ -194,12 +194,14 @@ const PaymentComponent = () => {
             Discard
           </Button>
         </div>
-        <DataGrid
-          rows={rows}
-          columns={columns}
-          checkboxSelection
-          pagination
-        />
+        <div style={{ height: '750px', width: '100%' }}>
+          <DataGrid
+            rows={rows}
+            columns={columns}
+            checkboxSelection
+            pagination
+          />
+        </div>
       </div>
     );
   };

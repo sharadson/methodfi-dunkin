@@ -1,7 +1,6 @@
 import { Document, Schema, Model, model } from 'mongoose';
 import { PaymentStatus } from './Payment';
 
-// Define TypeScript interfaces
 export interface IEmployee {
   dunkinId: string;
   dunkinBranch: string;

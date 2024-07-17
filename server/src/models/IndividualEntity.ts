@@ -1,4 +1,3 @@
-// IndividualEntity.ts
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IIndividualEntity extends Document {

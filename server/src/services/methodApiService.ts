@@ -54,7 +54,7 @@ class MethodApiService {
 
   async createIndividualEntity(employee: IEmployee) {
     const { firstName, lastName, dob, dunkinId, dunkinBranch } = employee;
-    const [month, day, year] = employee.dob.split("-");
+    const [month, day, year] = dob.split("-");
     const formattedDob = `${year}-${month}-${day}`;
 
     const response = await methodApi.post('/entities', {
@@ -233,6 +233,7 @@ class MethodApiService {
       await payment.save();
     } catch (error: any) {
       if (error.response && error.response.status !== 429) {
+        console.error('Error processing payment request:', error);
         payment = new Payment({
           paymentId: null,
           batchId: batchId,
