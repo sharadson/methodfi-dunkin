@@ -91,9 +91,8 @@ export class PaymentService {
     methodCache.merchantsByPlaidId = await methodApiService.getMerchantsByPlaidId();
 
     const paymentRequests = await PaymentRequest.find({ batchId: batchId });
-    for (const paymentRequest of paymentRequests) {
-      await methodApiService.processPaymentRequest(batchId, paymentRequest, methodCache);
-    }
+
+    await methodApiService.processPaymentRequestsInBatches(batchId, paymentRequests, methodCache);
   }
 
   async getPaymentRequestsByBatchId(batchId: any) {

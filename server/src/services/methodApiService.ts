@@ -6,7 +6,11 @@ import {PayeeAccount} from "../models/PayeeAccount";
 import {IPayorAccount, PayorAccount} from "../models/PayorAccount";
 import {Payment, PaymentStatus} from "../models/Payment";
 import {MethodCache} from "./paymentService";
+import { chunk } from 'lodash';
+import ApiError from "../utils/apiError";
 
+
+const MAX_CONCURRENT_REQUESTS = 80;
 const METHOD_API_BASE_URL = 'https://dev.methodfi.com';
 const METHOD_API_KEY = process.env.METHOD_API_KEY || 'sk_iUigphRRVh9RpEM8MkTNhWtM';
 
@@ -109,14 +113,14 @@ class MethodApiService {
       }
     });
     if (response.data.data.status !== 'verified') {
-      throw new Error('Account verification failed for payor account: ' + payorAccount.accountId + ' with verification session id: ' + response.data.data.id);
+      throw new ApiError('Account verification failed for payor account: ' + payorAccount.accountId + ' with verification session id: ' + response.data.data.id, 451);
     }
   }
 
   private createAndVerifyPayeeAccount = async (individualEntity: IIndividualEntity, payee: IPayee, merchantsByPlaidId: Record<string, IMerchantDetail>) => {
     // Merchant does not exist in Method API
     if (!merchantsByPlaidId[payee.plaidId]) {
-      throw new Error('Merchant not found for plaidId: ' + payee.plaidId);
+      throw new ApiError('Merchant not found for plaidId: ' + payee.plaidId, 452);
     }
     const merchant = merchantsByPlaidId[payee.plaidId];
     const response = await methodApi.post('/accounts', {
@@ -130,28 +134,39 @@ class MethodApiService {
       accountId: response.data.data.id, plaidId: payee.plaidId, entityId: individualEntity.entityId
     });
     await payeeAccount.save();
-    // Payee verification can not be done only on server side
+    // Payee (individual entity) verification can not be done only on server side
     // await this.verifyPayeeAccount(payeeAccount);
     return payeeAccount
   }
 
-  // private verifyPayeeAccount = async (payeeAccount: IPayeeAccount) => {
-  //   const response = await methodApi.post(
-  //     `/elements/token`,
-  //     {
-  //       type: "connect",
-  //       entity_id: payeeAccount.entityId,
-  //       connect: {
-  //         products: ["payment"]
-  //       }
-  //     }
-  //   );
-  //
-  //   if (!method) {
-  //     throw new Error('Method API not initialized');
-  //   }
-  //   method.open(response.data.data.element_token);
-  // }
+  async processPaymentRequestsInBatches(batchId: string, paymentRequests: IPaymentRequest[], cache: MethodCache) {
+    const chunks = chunk(paymentRequests, MAX_CONCURRENT_REQUESTS);
+
+    for (const localChunk of chunks) {
+      await Promise.all(localChunk.map(async (request) => {
+        try {
+          await this.processPaymentRequestWithRetry(batchId, request, cache);
+        } catch (error) {
+          console.error('Error processing payments request in batches:', error);
+        }
+      }));
+    }
+  }
+
+  async processPaymentRequestWithRetry(batchId: string, request: IPaymentRequest, cache: MethodCache, retries = 7, delay = 1000): Promise<void> {
+    try {
+      await this.processPaymentRequest(batchId, request, cache);
+    } catch (error: any) {
+      if (error.response && error.response.status === 429 && retries > 0) {
+        console.warn('Rate limit exceeded, retrying after delay...', { retries, delay });
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.processPaymentRequestWithRetry(batchId, request, cache, retries - 1, delay * 2); // Exponential backoff
+      } else {
+        console.error('Error processing payment request:', error);
+        throw error;
+      }
+    }
+  }
 
   async processPaymentRequest(batchId: string, paymentRequest: IPaymentRequest, cache: MethodCache) {
     const { paymentRequestId, employee, payor, payee, amount } = paymentRequest;
@@ -193,8 +208,9 @@ class MethodApiService {
       const response = await methodApi.post('/payments', {
         amount: Math.round(parseFloat(amount) * 100),
         source: payorAccount.accountId,
-        // IMP: FOr demo purpose: Hardcoded individual destination account that belongs to active user verified
-        // using method Element UI workflow (SMS verification etc)
+        // IMP: For demo purpose, and given individual entity can not be verified automatically on server side,
+        // destination account for individual entity/payee is hardcoded below
+        // relevant payee for this account is verified using Method Element UI workflow: react-method-elements (e.g. SMS verification, debt account selections etc)
         destination: 'acc_6AYf8tqziqzmH',
         description: `Loan pmt`
       });
@@ -216,23 +232,27 @@ class MethodApiService {
       });
       await payment.save();
     } catch (error: any) {
-      console.error('Error processing payment:', error);
-      payment = new Payment({
-        paymentId: null,
-        batchId: batchId,
-        paymentRequestId: paymentRequestId,
-        corporate: corporateEntity ? corporateEntity.id : null,
-        employee: individualEntity ? individualEntity.id : null,
-        payee: payeeAccount ? payeeAccount.id : null,
-        payor: payorAccount ? payorAccount.id : null,
-        employeeDunkinId: individualEntity? individualEntity.dunkinId: null,
-        payorDunkinId: payor? payor.dunkinId : null,
-        createdAt: new Date(),
-        status: PaymentStatus.Failed,
-        amount: paymentRequest.amount,
-        message: error.message
-      });
-      await payment.save();
+      if (error.response && error.response.status !== 429) {
+        payment = new Payment({
+          paymentId: null,
+          batchId: batchId,
+          paymentRequestId: paymentRequestId,
+          corporate: corporateEntity ? corporateEntity.id : null,
+          employee: individualEntity ? individualEntity.id : null,
+          payee: payeeAccount ? payeeAccount.id : null,
+          payor: payorAccount ? payorAccount.id : null,
+          employeeDunkinId: individualEntity ? individualEntity.dunkinId : null,
+          payorDunkinId: payor ? payor.dunkinId : null,
+          createdAt: new Date(),
+          status: PaymentStatus.Failed,
+          amount: paymentRequest.amount,
+          message: error.message
+        });
+        await payment.save();
+      }
+      else {
+        throw error;
+      }
     }
 
     await PaymentRequest.findOneAndUpdate({ paymentRequestId: paymentRequestId }, {
